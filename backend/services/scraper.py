@@ -7,19 +7,6 @@ from config import settings
 
 fc = FirecrawlApp(api_key=settings.FIRECRAWL_API_KEY)
 
-# Patterns that suggest a URL is a single article, not a blog root
-ARTICLE_PATTERNS = [
-    r"/\d{4}/\d{2}/",        # /2024/01/ date patterns
-    r"/p/",                   # Substack /p/slug
-    r"/post/",               # Generic /post/slug
-    r"/blog/.+",             # /blog/some-article
-    r"/article/",            # /article/slug
-    r"\.html$",              # ends in .html
-    r"\.htm$",               # ends in .htm
-    r"/@.+/.+",              # Medium /@user/slug
-    r"/\d{4}/.+/.+",        # /2024/category/slug
-]
-
 # URL path segments that are NOT articles (navigation/utility pages)
 SKIP_SEGMENTS = {
     "about", "contact", "privacy", "terms", "login", "signup", "register",
@@ -38,26 +25,21 @@ def _normalize_url(url: str) -> str:
     return url.rstrip("/")
 
 
-def _is_article_url(url: str) -> bool:
-    """Heuristic: does this URL look like a single article rather than a site root?"""
+
+def _is_index_page(url: str) -> bool:
+    """Detect index/listing pages that aren't actual articles."""
     parsed = urlparse(url)
-    path = parsed.path.rstrip("/")
+    path = parsed.path.lower().rstrip("/")
+    filename = path.split("/")[-1] if "/" in path else path
 
-    # Root path or very short path = not an article
-    if not path or path == "/" or len(path) < 5:
-        return False
-
-    # Check known article patterns
-    for pattern in ARTICLE_PATTERNS:
-        if re.search(pattern, path):
-            return True
-
-    # Has multiple path segments (e.g., /blog/my-article) = likely article
-    segments = [s for s in path.split("/") if s]
-    if len(segments) >= 2:
-        return True
-
-    return False
+    index_names = {
+        "index.html", "index.htm", "articles.html", "articles.htm",
+        "blog.html", "posts.html", "archive.html", "archives.html",
+        "essays.html", "writing.html", "all.html", "list.html",
+        "index", "articles", "blog", "posts", "archive", "archives",
+        "essays", "writing",
+    }
+    return filename in index_names or path in ("", "/")
 
 
 def _is_useful_url(url: str) -> bool:
@@ -81,38 +63,50 @@ def _is_useful_url(url: str) -> bool:
 async def scrape_blog_posts(blog_url: str, limit: int = 50) -> list[dict]:
     """Scrape posts from a blog URL or a single article URL.
 
+    Strategy: always try map() first to discover links. If map finds
+    multiple pages, scrape those. If map finds nothing, scrape the
+    submitted URL directly (single article mode).
+
     Handles:
-    - Single article URL (paulgraham.com/greatwork.html) → scrapes that one article
-    - Blog root URL (paulgraham.com) → maps site, discovers articles, scrapes top ones
+    - Index pages (paulgraham.com/articles.html) → map discovers all essays
+    - Single article URL (paulgraham.com/greatwork.html) → map finds nothing, scrapes directly
+    - Blog root URL (paulgraham.com) → maps site, discovers articles
     - URL without protocol → auto-adds https://
     - Medium, Substack, WordPress, custom blogs
     - Deduplicates URLs, filters non-article pages
     """
     blog_url = _normalize_url(blog_url)
-    is_single = _is_article_url(blog_url)
 
-    # --- Single article mode: skip mapping, scrape directly ---
-    if is_single:
+    # Step 1: Always try mapping to discover links
+    discovered = await _discover_urls(blog_url, limit)
+
+    # Step 2: Decide mode based on what map found
+    if len(discovered) > 1:
+        # Map found multiple pages — discovery mode
+        urls = discovered
+    else:
+        # Map found 0-1 pages — single article mode, scrape submitted URL
         post = await _scrape_one(blog_url)
         return [post] if post else []
 
-    # --- Blog discovery mode: map first, then scrape ---
-    urls = await _discover_urls(blog_url, limit)
-
-    # Always include the submitted URL as fallback
-    if blog_url not in urls:
-        urls.insert(0, blog_url)
-
-    # Filter and deduplicate
+    # Step 3: Filter out non-article URLs (about, contact, etc.)
+    # but keep the original URL as fallback
     seen = set()
     filtered = []
     for url in urls:
         normalized = _normalize_url(url)
         if normalized not in seen and _is_useful_url(normalized):
             seen.add(normalized)
-            filtered.append(normalized)
+            # Skip index/listing pages in discovery mode — we want the actual articles
+            if not _is_index_page(normalized):
+                filtered.append(normalized)
 
-    # Scrape articles (skip root-like pages in batch mode)
+    if not filtered:
+        # All URLs were filtered out — scrape original as fallback
+        post = await _scrape_one(blog_url)
+        return [post] if post else []
+
+    # Step 4: Scrape discovered articles
     posts = []
     for url in filtered[:limit]:
         post = await _scrape_one(url)
