@@ -12,31 +12,32 @@ async def scrape_blog_posts(blog_url: str, limit: int = 50) -> list[dict]:
     Returns list of {"url": str, "title": str, "text": str}
     """
     # Step 1: Map the blog to discover all post URLs
-    map_result = fc.map_url(url=blog_url, params={"limit": limit})
+    map_result = fc.map(url=blog_url, limit=limit)
 
-    if not map_result or not map_result.get("links"):
+    if not map_result or not map_result.links:
         return []
 
-    urls = map_result["links"]
+    urls = map_result.links
 
-    # Step 2: Batch scrape the posts
+    # Step 2: Scrape the posts
     posts = []
     for url in urls[:limit]:
         try:
-            result = fc.scrape_url(
+            result = fc.scrape(
                 url=url,
-                params={
-                    "formats": ["markdown"],
-                    "onlyMainContent": True,
-                },
+                formats=["markdown"],
+                only_main_content=True,
             )
-            if result and result.get("markdown"):
-                text = result["markdown"]
+            if result and result.markdown:
+                text = result.markdown
                 # Skip very short posts (likely index/nav pages)
                 if len(text) > 300:
+                    title = "Untitled"
+                    if result.metadata and hasattr(result.metadata, "title"):
+                        title = result.metadata.title or "Untitled"
                     posts.append({
                         "url": url,
-                        "title": result.get("metadata", {}).get("title", "Untitled"),
+                        "title": title,
                         "text": text,
                     })
         except Exception:
@@ -48,33 +49,27 @@ async def scrape_blog_posts(blog_url: str, limit: int = 50) -> list[dict]:
 async def scrape_single_post(url: str) -> dict | None:
     """Scrape a single blog post and extract content + license info."""
     try:
-        result = fc.scrape_url(
+        result = fc.scrape(
             url=url,
-            params={
-                "formats": [
-                    "markdown",
-                    {
-                        "type": "attributes",
-                        "selectors": [
-                            {"selector": "a[rel='license']", "attribute": "href"},
-                            {"selector": "meta[name='license']", "attribute": "content"},
-                            {"selector": ".cc-license, .creativecommons, [class*='creative-commons']", "attribute": "outerHTML"},
-                        ],
-                    },
-                ],
-                "onlyMainContent": True,
-            },
+            formats=["markdown"],
+            only_main_content=True,
         )
 
-        if not result or not result.get("markdown"):
+        if not result or not result.markdown:
             return None
+
+        title = "Untitled"
+        metadata = {}
+        if result.metadata:
+            title = getattr(result.metadata, "title", "Untitled") or "Untitled"
+            metadata = result.metadata.__dict__ if hasattr(result.metadata, "__dict__") else {}
 
         return {
             "url": url,
-            "title": result.get("metadata", {}).get("title", "Untitled"),
-            "text": result["markdown"],
-            "attributes": result.get("attributes", {}),
-            "metadata": result.get("metadata", {}),
+            "title": title,
+            "text": result.markdown,
+            "attributes": {},
+            "metadata": metadata,
         }
     except Exception:
         return None
@@ -119,16 +114,14 @@ Return at least 10 blogs.""",
         max_credits=2500,
     )
 
-    if result and result.get("data", {}).get("blogs"):
-        return result["data"]["blogs"]
+    if result and hasattr(result, "data") and result.data:
+        blogs = result.data.get("blogs", []) if isinstance(result.data, dict) else []
+        return blogs
     return []
 
 
 def verify_license(attributes: dict) -> str | None:
-    """Verify CC license from scraped page attributes.
-
-    Returns license type string or None if not CC-licensed.
-    """
+    """Verify CC license from scraped page attributes."""
     valid_licenses = {
         "creativecommons.org/publicdomain/zero": "CC0",
         "creativecommons.org/licenses/by/": "CC-BY",
@@ -136,7 +129,6 @@ def verify_license(attributes: dict) -> str | None:
         "creativecommons.org/licenses/by-nc/": "CC-BY-NC",
     }
 
-    # Check all attribute values for CC license URLs
     for key, values in attributes.items():
         if not isinstance(values, list):
             values = [values]

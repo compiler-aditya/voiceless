@@ -21,20 +21,17 @@ async def build_time_capsule(anonymized_text: str, category: str) -> dict:
             "statistics": [str]
         }
     """
-    # Step 1: Extract temporal signals from the story
     signals = await _extract_signals(anonymized_text)
 
     facts = []
     cultural = []
     statistics = []
 
-    # Step 2: If we have a year, search for era context
     year = signals.get("year")
     if year:
         facts = await _search_era_facts(year, category)
         cultural = await _search_cultural_context(year)
 
-    # Step 3: Search for category-specific statistics
     theme = signals.get("theme", category)
     statistics = await _search_statistics(category, theme)
 
@@ -71,23 +68,30 @@ TEXT:
         return {"year": None, "season": None, "location_type": None, "theme": ""}
 
 
+def _extract_search_snippets(results) -> str:
+    """Extract text snippets from Firecrawl search results."""
+    if not results or not results.data:
+        return ""
+    snippets = []
+    for r in results.data:
+        desc = r.description or ""
+        title = r.title or ""
+        if desc or title:
+            snippets.append(f"{title}: {desc}" if title else desc)
+    return "\n".join(snippets)
+
+
 async def _search_era_facts(year: int, category: str) -> list[str]:
     """Search for what was happening in the world during that year."""
     try:
         results = fc.search(
             query=f"what happened in {year} {category} statistics facts",
-            params={"limit": 5},
+            limit=5,
         )
 
-        if not results or not results.get("data"):
+        snippets = _extract_search_snippets(results)
+        if not snippets:
             return []
-
-        # Extract concise facts using Gemini
-        snippets = "\n".join(
-            r.get("description", "") or r.get("title", "")
-            for r in results["data"][:5]
-            if r.get("description") or r.get("title")
-        )
 
         response = gemini.models.generate_content(
             model=MODEL,
@@ -111,17 +115,12 @@ async def _search_cultural_context(year: int) -> list[str]:
     try:
         results = fc.search(
             query=f"most popular song movie {year} pop culture",
-            params={"limit": 3},
+            limit=3,
         )
 
-        if not results or not results.get("data"):
+        snippets = _extract_search_snippets(results)
+        if not snippets:
             return []
-
-        snippets = "\n".join(
-            r.get("description", "") or r.get("title", "")
-            for r in results["data"][:3]
-            if r.get("description") or r.get("title")
-        )
 
         response = gemini.models.generate_content(
             model=MODEL,
@@ -142,17 +141,12 @@ async def _search_statistics(category: str, theme: str) -> list[str]:
     try:
         results = fc.search(
             query=f"how many people experience {theme} {category} statistics",
-            params={"limit": 3},
+            limit=3,
         )
 
-        if not results or not results.get("data"):
+        snippets = _extract_search_snippets(results)
+        if not snippets:
             return []
-
-        snippets = "\n".join(
-            r.get("description", "") or r.get("title", "")
-            for r in results["data"][:3]
-            if r.get("description") or r.get("title")
-        )
 
         response = gemini.models.generate_content(
             model=MODEL,

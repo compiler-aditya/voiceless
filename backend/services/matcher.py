@@ -16,19 +16,11 @@ async def find_similar_stories(anonymized_text: str, category: str, emotion: str
     Returns list of:
         {"snippet": str, "year": int | None, "source_type": "blog"}
     """
-    # Step 1: Extract a searchable theme summary
     theme = await _extract_theme(anonymized_text)
-
-    # Step 2: Search for similar CC-licensed writing
     results_cc = await _search_similar(f"personal blog {theme} creative commons {category}")
-
-    # Step 3: Search for similar personal essays generally
     results_general = await _search_similar(f"personal essay {theme} {emotion} experience")
-
-    # Step 4: Combine, deduplicate, and anonymize snippets
     all_results = results_cc + results_general
     similar = await _process_results(all_results, category)
-
     return similar[:5]
 
 
@@ -54,9 +46,12 @@ Return ONLY the search query, nothing else.""",
 async def _search_similar(query: str) -> list[dict]:
     """Run a Firecrawl search and return raw results."""
     try:
-        results = fc.search(query=query, params={"limit": 5})
-        if results and results.get("data"):
-            return results["data"]
+        results = fc.search(query=query, limit=5)
+        if results and results.data:
+            return [
+                {"title": r.title or "", "description": r.description or "", "url": r.url or ""}
+                for r in results.data
+            ]
     except Exception:
         pass
     return []
@@ -67,7 +62,6 @@ async def _process_results(results: list[dict], category: str) -> list[dict]:
     if not results:
         return []
 
-    # Collect snippets
     snippets_text = ""
     for r in results[:8]:
         desc = r.get("description", "") or ""

@@ -135,7 +135,7 @@ async def _pass_traceability_check(text: str) -> str:
         search_query = text[:150].replace('"', "").replace("\n", " ")
         results = fc.search(query=f'"{search_query}"', limit=3)
 
-        if results and results.get("data"):
+        if results and results.data:
             # Found matches — needs further anonymization
             response = client.models.generate_content(
                 model=MODEL,
