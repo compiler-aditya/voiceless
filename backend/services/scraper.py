@@ -7,17 +7,20 @@ fc = FirecrawlApp(api_key=settings.FIRECRAWL_API_KEY)
 
 
 async def scrape_blog_posts(blog_url: str, limit: int = 50) -> list[dict]:
-    """Scrape all posts from a blog URL.
+    """Scrape all posts from a blog URL (or a single article URL).
 
     Returns list of {"url": str, "title": str, "text": str}
     """
     # Step 1: Map the blog to discover all post URLs
-    map_result = fc.map(url=blog_url, limit=limit)
+    try:
+        map_result = fc.map(url=blog_url, limit=limit)
+        urls = map_result.links if map_result and map_result.links else []
+    except Exception:
+        urls = []
 
-    if not map_result or not map_result.links:
-        return []
-
-    urls = map_result.links
+    # If map found nothing or very few, include the original URL itself
+    if blog_url not in urls:
+        urls.insert(0, blog_url)
 
     # Step 2: Scrape the posts
     posts = []
