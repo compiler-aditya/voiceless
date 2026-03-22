@@ -8,6 +8,7 @@ import TimeCapsule from "@/components/TimeCapsule";
 import YoureNotAlone from "@/components/YoureNotAlone";
 import ReflectionWidget from "@/components/ReflectionWidget";
 import IdentityPromise from "@/components/IdentityPromise";
+import Link from "next/link";
 
 export default function StoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -22,24 +23,30 @@ export default function StoryPage({ params }: { params: Promise<{ id: string }> 
   }, [id]);
 
   if (loading) {
-    return <div className="text-center text-zinc-500 py-16">Loading story...</div>;
+    return <div className="text-center text-on-surface-variant py-16">Loading story...</div>;
   }
 
   if (!story) {
-    return <div className="text-center text-zinc-500 py-16">Story not found.</div>;
+    return <div className="text-center text-on-surface-variant py-16">Story not found.</div>;
   }
 
   const sourceLabel =
     story.source_type === "cc_blog"
-      ? `Found on a ${story.time_capsule?.era || ""} blog`
-      : "Submitted anonymously";
+      ? `From the Archives ${story.time_capsule?.era ? `\u00B7 ${story.time_capsule.era}` : ""}`
+      : "Anonymous Submission";
 
   return (
-    <div className="space-y-6">
-      {/* Story header */}
-      <div className="text-center">
-        <div className="text-xs text-zinc-600 uppercase tracking-wide mb-2">
-          {story.category} · {sourceLabel}
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Back + Category badge */}
+      <div className="flex items-center gap-4">
+        <Link href="/" className="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">
+          arrow_back
+        </Link>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 bg-primary-container/10 text-primary text-xs font-bold uppercase tracking-wide rounded-full">
+            {story.category}
+          </span>
+          <span className="text-xs text-on-surface-variant">{sourceLabel}</span>
         </div>
       </div>
 
@@ -52,11 +59,11 @@ export default function StoryPage({ params }: { params: Promise<{ id: string }> 
           text={story.anonymized_text}
         />
       ) : (
-        <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
-          <h2 className="text-xl font-semibold text-zinc-100 mb-4">
-            &ldquo;{story.title}&rdquo;
+        <div className="glass-player rounded-xl p-6 md:p-8 border border-outline-variant/10 shadow-2xl">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
+            {story.title}
           </h2>
-          <p className="text-zinc-400 leading-relaxed italic">
+          <p className="text-on-surface-variant leading-relaxed italic">
             {story.anonymized_text}
           </p>
         </div>
@@ -97,12 +104,13 @@ export default function StoryPage({ params }: { params: Promise<{ id: string }> 
 
       {/* Share prompt */}
       <div className="text-center py-4">
-        <a
+        <Link
           href={`/submit?category=${story.category}`}
-          className="inline-block bg-zinc-900 border border-zinc-800 text-zinc-300 px-6 py-2.5 rounded-full text-sm hover:border-zinc-700 transition"
+          className="inline-flex items-center gap-2 bg-surface-container border border-outline-variant/10 text-on-surface-variant px-6 py-3 rounded-full text-sm font-medium hover:border-primary-container/30 hover:text-primary transition-all"
         >
+          <span className="material-symbols-outlined text-lg">edit</span>
           Share YOUR story about {story.category}
-        </a>
+        </Link>
       </div>
     </div>
   );

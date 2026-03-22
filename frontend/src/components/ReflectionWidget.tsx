@@ -25,25 +25,40 @@ export default function ReflectionWidget({ agentId, storyTheme, emotion, era }: 
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-left hover:border-zinc-700 transition"
+          className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl p-5 text-left hover:border-primary-container/30 transition group"
         >
-          <div className="text-zinc-300 font-medium">🎙 Talk about this</div>
-          <div className="text-zinc-500 text-sm mt-1">
-            Have a reflective conversation about what you just heard.
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary-container text-on-primary flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+                mic
+              </span>
+            </div>
+            <div>
+              <div className="text-on-surface font-bold">Talk about this</div>
+              <div className="text-on-surface-variant text-sm">
+                Have a reflective conversation about what you just heard.
+              </div>
+            </div>
           </div>
         </button>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <div className="flex justify-between items-center mb-3">
-            <div className="text-zinc-300 font-medium">Reflection Companion</div>
+        <div className="bg-surface-container-low border border-outline-variant/10 rounded-xl p-5">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  mic
+                </span>
+              </div>
+              <span className="text-on-surface font-bold">Reflection Companion</span>
+            </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-zinc-500 hover:text-zinc-300 text-sm"
+              className="text-on-surface-variant hover:text-primary text-sm font-medium transition-colors"
             >
               Close
             </button>
           </div>
-          {/* ElevenLabs Conversational AI Widget */}
           <div
             dangerouslySetInnerHTML={{
               __html: `

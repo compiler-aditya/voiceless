@@ -19,29 +19,31 @@ export default function MomentsPage() {
   }, [page]);
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-3xl mx-auto space-y-8">
       <div className="text-center">
-        <h1 className="text-2xl font-light text-zinc-100 mb-2">Moments</h1>
-        <p className="text-zinc-500 text-sm">
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tighter mb-2">
+          B-Side <span className="text-secondary">Moments</span>
+        </h1>
+        <p className="text-on-surface-variant">
           Short, meaningful life moments shared anonymously. Follow a voice to hear their journey unfold.
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {moments.map((m) => (
           <MomentCard key={m.id} moment={m} />
         ))}
       </div>
 
       {loading && (
-        <div className="text-center text-zinc-500 py-8">Loading moments...</div>
+        <div className="text-center text-on-surface-variant py-8">Loading moments...</div>
       )}
 
       {!loading && moments.length > 0 && (
         <div className="text-center">
           <button
             onClick={() => setPage((p) => p + 1)}
-            className="bg-zinc-900 border border-zinc-800 text-zinc-400 px-4 py-2 rounded-full text-sm hover:text-zinc-200 transition"
+            className="bg-surface-container border border-outline-variant/10 text-on-surface-variant px-5 py-2.5 rounded-full text-sm font-medium hover:bg-surface-container-high transition-colors"
           >
             Load more
           </button>
@@ -49,7 +51,7 @@ export default function MomentsPage() {
       )}
 
       {!loading && moments.length === 0 && (
-        <div className="text-center py-12 text-zinc-500">
+        <div className="text-center py-12 text-on-surface-variant">
           No moments shared yet.
         </div>
       )}
@@ -57,8 +59,9 @@ export default function MomentsPage() {
       <div className="text-center pt-4">
         <Link
           href="/submit"
-          className="inline-block bg-white text-black px-6 py-2 rounded-full text-sm font-medium hover:bg-zinc-200 transition"
+          className="inline-flex items-center gap-2 bg-primary-container text-on-primary px-6 py-3 rounded-full font-bold hover:scale-105 transition-transform"
         >
+          <span className="material-symbols-outlined">mic</span>
           Post a Moment
         </Link>
       </div>

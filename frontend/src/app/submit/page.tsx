@@ -6,6 +6,12 @@ import IdentityPromise from "@/components/IdentityPromise";
 
 type Tab = "write" | "speak" | "blog";
 
+const TABS: { key: Tab; label: string; icon: string }[] = [
+  { key: "write", label: "Write It", icon: "edit" },
+  { key: "speak", label: "Speak It", icon: "mic" },
+  { key: "blog", label: "Connect Blog", icon: "link" },
+];
+
 export default function SubmitPage() {
   const [tab, setTab] = useState<Tab>("write");
   const [text, setText] = useState("");
@@ -14,7 +20,6 @@ export default function SubmitPage() {
   const [result, setResult] = useState<{ id: string; status: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Voice recording state
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -41,11 +46,9 @@ export default function SubmitPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
-
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         stream.getTracks().forEach((t) => t.stop());
@@ -59,7 +62,6 @@ export default function SubmitPage() {
           setSubmitting(false);
         }
       };
-
       mediaRecorderRef.current = recorder;
       recorder.start();
       setRecording(true);
@@ -87,7 +89,6 @@ export default function SubmitPage() {
     }
   };
 
-  // Poll for status
   const checkStatus = async () => {
     if (!result?.id) return;
     try {
@@ -100,13 +101,17 @@ export default function SubmitPage() {
 
   if (result) {
     return (
-      <div className="space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center py-12">
-          <div className="text-4xl mb-4">🎙</div>
-          <h2 className="text-xl text-zinc-100 mb-2">Story received</h2>
-          <p className="text-zinc-500 mb-1">Status: {result.status}</p>
+          <div className="w-16 h-16 rounded-full bg-primary-container text-on-primary flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+              check_circle
+            </span>
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Story received</h2>
+          <p className="text-on-surface-variant mb-1">Status: {result.status}</p>
           {result.id && (
-            <p className="text-zinc-600 text-sm">
+            <p className="text-on-surface-variant/60 text-sm">
               Your story is being anonymized and produced into an audio episode.
             </p>
           )}
@@ -114,14 +119,14 @@ export default function SubmitPage() {
             {result.id && (
               <button
                 onClick={checkStatus}
-                className="bg-zinc-900 border border-zinc-800 text-zinc-300 px-4 py-2 rounded-full text-sm hover:border-zinc-700 transition"
+                className="bg-surface-container border border-outline-variant/10 text-on-surface-variant px-5 py-2.5 rounded-full text-sm font-medium hover:border-primary-container/30 transition-all"
               >
                 Check status
               </button>
             )}
             <button
               onClick={() => { setResult(null); setText(""); setBlogUrl(""); }}
-              className="bg-zinc-900 border border-zinc-800 text-zinc-300 px-4 py-2 rounded-full text-sm hover:border-zinc-700 transition"
+              className="bg-primary-container text-on-primary px-5 py-2.5 rounded-full text-sm font-bold hover:scale-105 transition-transform"
             >
               Submit another
             </button>
@@ -132,30 +137,29 @@ export default function SubmitPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl mx-auto space-y-8">
       <div className="text-center">
-        <h1 className="text-2xl font-light text-zinc-100 mb-2">What&apos;s your story?</h1>
-        <p className="text-zinc-500 text-sm">
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tighter mb-2">
+          What&apos;s your <span className="text-primary-container">story</span>?
+        </h1>
+        <p className="text-on-surface-variant">
           Write or speak about a moment that changed you, a memory you carry, or something you&apos;ve never told anyone.
         </p>
       </div>
 
       {/* Tab selector */}
       <div className="flex gap-2 justify-center">
-        {([
-          { key: "write" as Tab, label: "Write It" },
-          { key: "speak" as Tab, label: "Speak It" },
-          { key: "blog" as Tab, label: "Connect Blog" },
-        ]).map((t) => (
+        {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-full text-sm transition
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all
               ${tab === t.key
-                ? "bg-white text-black"
-                : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200"
+                ? "bg-primary-container text-on-primary"
+                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
               }`}
           >
+            <span className="material-symbols-outlined text-lg">{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -169,14 +173,14 @@ export default function SubmitPage() {
             onChange={(e) => setText(e.target.value)}
             placeholder="I remember the day..."
             rows={10}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none focus:border-zinc-700"
+            className="w-full bg-surface-container border border-outline-variant/10 rounded-xl p-5 text-on-surface placeholder-on-surface-variant/40 resize-none focus:outline-none focus:border-primary-container/40 transition-colors"
           />
           <div className="flex justify-between items-center">
-            <span className="text-xs text-zinc-600">{text.length} characters</span>
+            <span className="text-xs text-on-surface-variant/60">{text.length} characters</span>
             <button
               onClick={handleTextSubmit}
               disabled={submitting || text.length < 50}
-              className="bg-white text-black px-6 py-2 rounded-full text-sm font-medium hover:bg-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-primary-container text-on-primary px-6 py-2.5 rounded-full text-sm font-bold hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {submitting ? "Submitting..." : "Submit Story"}
             </button>
@@ -190,15 +194,20 @@ export default function SubmitPage() {
           <button
             onClick={recording ? stopRecording : startRecording}
             disabled={submitting}
-            className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl transition
+            className={`w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-lg
               ${recording
-                ? "bg-red-600 animate-pulse"
-                : "bg-zinc-800 hover:bg-zinc-700"
+                ? "bg-error animate-pulse shadow-error/30"
+                : "bg-primary-container text-on-primary hover:scale-110"
               }`}
           >
-            {recording ? "⏹" : "🎤"}
+            <span
+              className="material-symbols-outlined text-4xl"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              {recording ? "stop" : "mic"}
+            </span>
           </button>
-          <p className="text-zinc-500 text-sm mt-4">
+          <p className="text-on-surface-variant text-sm mt-4">
             {recording
               ? "Recording... tap to stop"
               : submitting
@@ -217,16 +226,16 @@ export default function SubmitPage() {
             value={blogUrl}
             onChange={(e) => setBlogUrl(e.target.value)}
             placeholder="https://yourblog.com"
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+            className="w-full bg-surface-container border border-outline-variant/10 rounded-xl p-4 text-on-surface placeholder-on-surface-variant/40 focus:outline-none focus:border-primary-container/40 transition-colors"
           />
-          <p className="text-zinc-600 text-sm">
+          <p className="text-on-surface-variant/60 text-sm">
             We&apos;ll scan your blog and find the most emotionally compelling posts.
             You choose which ones to share anonymously.
           </p>
           <button
             onClick={handleBlogSubmit}
             disabled={submitting || !blogUrl}
-            className="bg-white text-black px-6 py-2 rounded-full text-sm font-medium hover:bg-zinc-200 transition disabled:opacity-50"
+            className="bg-primary-container text-on-primary px-6 py-2.5 rounded-full text-sm font-bold hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
           >
             {submitting ? "Scanning..." : "Scan Blog"}
           </button>
@@ -234,8 +243,9 @@ export default function SubmitPage() {
       )}
 
       {error && (
-        <div className="bg-red-900/20 border border-red-800/30 rounded-lg p-3 text-red-400 text-sm">
-          {error}
+        <div className="bg-error-container/20 border border-error/20 rounded-xl p-4 flex items-center gap-3">
+          <span className="material-symbols-outlined text-error">error</span>
+          <span className="text-error text-sm">{error}</span>
         </div>
       )}
 

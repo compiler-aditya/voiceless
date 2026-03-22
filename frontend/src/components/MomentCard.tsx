@@ -3,8 +3,16 @@
 import Link from "next/link";
 import type { Moment } from "@/lib/api";
 
+const BORDER_COLORS = [
+  "border-primary-container",
+  "border-secondary",
+  "border-tertiary",
+  "border-primary",
+];
+
 export default function MomentCard({ moment }: { moment: Moment }) {
   const totalReactions = Object.values(moment.reaction_counts || {}).reduce((a, b) => a + b, 0);
+  const borderColor = BORDER_COLORS[(moment.voice_number || 0) % BORDER_COLORS.length];
 
   const formatTime = (dateStr?: string) => {
     if (!dateStr) return "";
@@ -20,45 +28,41 @@ export default function MomentCard({ moment }: { moment: Moment }) {
   };
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-      {/* Voice header */}
-      <div className="flex items-center justify-between mb-2">
-        <Link
-          href={`/voice/${moment.voice_profile_id}`}
-          className="text-sm text-zinc-500 hover:text-zinc-300 transition"
-        >
-          Voice #{moment.voice_number}
-          {moment.voice_tagline && (
-            <span className="text-zinc-600 ml-1">· {moment.voice_tagline}</span>
-          )}
-        </Link>
-        <span className="text-xs text-zinc-600">{formatTime(moment.published_at)}</span>
+    <div className={`bg-surface-container-low p-4 rounded-xl border-l-4 ${borderColor} flex gap-4 items-center group cursor-pointer hover:bg-surface-container transition-colors`}>
+      <div className="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-primary group-hover:scale-110 transition-transform flex-shrink-0">
+        <span className="material-symbols-outlined">mic_external_on</span>
       </div>
 
-      {/* Moment text */}
-      <p className="text-zinc-200 leading-relaxed mb-3">
-        &ldquo;{moment.anonymized_text}&rdquo;
-      </p>
-
-      {/* Audio + reactions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <Link
+            href={`/voice/${moment.voice_profile_id}`}
+            className="text-xs text-on-surface-variant hover:text-primary transition-colors font-bold uppercase tracking-wide"
+          >
+            Voice #{moment.voice_number}
+          </Link>
+          <span className="text-[10px] text-on-surface-variant">{formatTime(moment.published_at)}</span>
+        </div>
+        <p className="text-sm text-on-surface truncate">
+          {moment.anonymized_text}
+        </p>
+        <div className="flex items-center gap-3 mt-1">
           {moment.audio_url && (
-            <span className="text-zinc-500 text-sm">
-              ▶ {moment.audio_duration_secs ? `${Math.ceil(moment.audio_duration_secs / 60)} min` : ""}
+            <span className="text-[10px] text-on-surface-variant">
+              {moment.audio_duration_secs ? `${moment.audio_duration_secs}s` : ""}
+            </span>
+          )}
+          {totalReactions > 0 && (
+            <span className="text-[10px] text-on-surface-variant">
+              {totalReactions} reactions
             </span>
           )}
         </div>
-
-        {totalReactions > 0 && (
-          <div className="flex items-center gap-2 text-sm text-zinc-500">
-            {moment.reaction_counts?.cry ? <span>😢 {moment.reaction_counts.cry}</span> : null}
-            {moment.reaction_counts?.hug ? <span>🤗 {moment.reaction_counts.hug}</span> : null}
-            {moment.reaction_counts?.heart ? <span>❤️ {moment.reaction_counts.heart}</span> : null}
-            {moment.reaction_counts?.strong ? <span>💪 {moment.reaction_counts.strong}</span> : null}
-          </div>
-        )}
       </div>
+
+      <span className="material-symbols-outlined text-on-surface-variant opacity-40 flex-shrink-0">
+        play_circle
+      </span>
     </div>
   );
 }

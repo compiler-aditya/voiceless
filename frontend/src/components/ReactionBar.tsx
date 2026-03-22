@@ -4,11 +4,11 @@ import { useState } from "react";
 import { reactToStory, reactToMoment } from "@/lib/api";
 
 const REACTIONS = [
-  { type: "cry", emoji: "😢", label: "Moved" },
-  { type: "hug", emoji: "🤗", label: "Comforted" },
-  { type: "strong", emoji: "💪", label: "Inspired" },
-  { type: "think", emoji: "🤔", label: "Reflective" },
-  { type: "heart", emoji: "❤️", label: "Love" },
+  { type: "cry", icon: "water_drop", label: "Moved" },
+  { type: "hug", icon: "volunteer_activism", label: "Comforted" },
+  { type: "strong", icon: "fitness_center", label: "Inspired" },
+  { type: "think", icon: "psychology", label: "Reflective" },
+  { type: "heart", icon: "favorite", label: "Love" },
 ];
 
 interface ReactionBarProps {
@@ -50,27 +50,32 @@ export default function ReactionBar({ targetId, targetType, initialCounts, meToo
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
-    <div>
-      <div className="text-sm text-zinc-500 mb-2">How did this make you feel?</div>
+    <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/10">
+      <div className="text-xs font-bold uppercase tracking-widest text-secondary mb-3">How did this make you feel?</div>
       <div className="flex gap-2 flex-wrap">
         {REACTIONS.map((r) => (
           <button
             key={r.type}
             onClick={() => handleReact(r.type)}
             disabled={reacted.has(r.type)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition text-sm
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium
               ${reacted.has(r.type)
-                ? "border-zinc-600 bg-zinc-800 text-zinc-300"
-                : "border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200"
+                ? "border-primary-container bg-primary-container/10 text-primary"
+                : "border-outline-variant/20 text-on-surface-variant hover:border-primary-container hover:text-primary"
               }`}
           >
-            <span>{r.emoji}</span>
+            <span
+              className="material-symbols-outlined text-lg"
+              style={reacted.has(r.type) ? { fontVariationSettings: "'FILL' 1" } : {}}
+            >
+              {r.icon}
+            </span>
             <span>{counts[r.type] || 0}</span>
           </button>
         ))}
       </div>
       {total > 0 && (
-        <div className="mt-3 text-sm text-zinc-500">
+        <div className="mt-3 text-sm text-on-surface-variant">
           {(meTooCount || total).toLocaleString()} people felt this too.
         </div>
       )}
