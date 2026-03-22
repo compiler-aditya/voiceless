@@ -73,7 +73,7 @@ class VoiceSubmission(BaseModel):
 
 
 class BlogSubmission(BaseModel):
-    blog_url: str
+    blog_url: str = Field(..., min_length=4, max_length=2000)
 
 
 class MomentCreate(BaseModel):

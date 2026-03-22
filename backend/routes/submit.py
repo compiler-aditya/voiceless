@@ -10,20 +10,18 @@ async def submit_text_story(submission: TextSubmission):
     """Submit a text story for production."""
     db = get_db()
 
-    # Insert as pending story
     result = db.table("stories").insert({
-        "title": "Untitled",  # Will be generated during scripting
-        "anonymized_text": "",  # Will be filled after anonymization
+        "title": "Untitled",
+        "anonymized_text": "",
         "source_type": "user_text",
-        "category": "hope",  # Placeholder — scorer will determine
-        "emotion": "peace",  # Placeholder — scorer will determine
+        "category": "hope",
+        "emotion": "peace",
         "status": "pending",
-        "episode_script": submission.text,  # Store original in script field temporarily
+        "episode_script": submission.text,
     }).execute()
 
     story_id = result.data[0]["id"]
 
-    # Trigger async production pipeline
     from tasks.produce_episode import produce_episode_task
     produce_episode_task.delay(story_id, submission.text, "user_text")
 
@@ -35,10 +33,9 @@ async def submit_voice_story(audio: UploadFile = File(...)):
     """Submit a voice recording for transcription and production."""
     audio_bytes = await audio.read()
 
-    if len(audio_bytes) > 50 * 1024 * 1024:  # 50MB limit
+    if len(audio_bytes) > 50 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Audio file too large (max 50MB)")
 
-    # Transcribe with ElevenLabs Scribe
     from services.transcriber import transcribe_audio
     transcript = await transcribe_audio(audio_bytes)
 
@@ -66,30 +63,57 @@ async def submit_voice_story(audio: UploadFile = File(...)):
 
 @router.post("/blog")
 async def submit_blog(submission: BlogSubmission):
-    """Submit a blog URL — we'll scrape and find the best stories."""
+    """Submit a blog URL — we'll scrape and find the best stories.
+
+    Handles:
+    - Single article URL → scrapes that one article, scores it, returns it regardless
+    - Blog root URL → maps site, scrapes articles, returns top scored candidates
+    - Empty results → clear error message
+    """
     from services.scraper import scrape_blog_posts
 
     posts = await scrape_blog_posts(submission.blog_url)
 
     if not posts:
-        raise HTTPException(status_code=400, detail="Could not find any posts on this blog.")
+        raise HTTPException(
+            status_code=400,
+            detail="Could not find any readable content at this URL. Check the URL and try again.",
+        )
 
-    # Score and return top candidates for user to pick
-    from services.scorer import score_stories_batch
-    scored = await score_stories_batch(posts)
+    # Score all posts
+    from services.scorer import score_story
+    candidates = []
+
+    for post in posts:
+        try:
+            score = await score_story(post["text"][:5000])  # Cap text length for scoring
+            total = score.get("emotional_depth", 0) + score.get("universality", 0) + score.get("originality", 0)
+            candidates.append({
+                "url": post["url"],
+                "title": post.get("title", "Untitled"),
+                "snippet": post["text"][:300],
+                "score": score,
+                "total_score": total,
+                "passes_quality": score.get("passes", False),
+            })
+        except Exception:
+            # If scoring fails, still include with zero score
+            candidates.append({
+                "url": post["url"],
+                "title": post.get("title", "Untitled"),
+                "snippet": post["text"][:300],
+                "score": {},
+                "total_score": 0,
+                "passes_quality": False,
+            })
+
+    # Sort by total score descending
+    candidates.sort(key=lambda c: c["total_score"], reverse=True)
 
     return {
         "blog_url": submission.blog_url,
         "total_posts_found": len(posts),
-        "candidates": [
-            {
-                "url": p["url"],
-                "title": p.get("title", "Untitled"),
-                "snippet": p["text"][:200],
-                "score": s,
-            }
-            for p, s in scored[:5]  # Top 5
-        ],
+        "candidates": candidates[:10],
     }
 
 
