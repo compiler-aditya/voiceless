@@ -145,10 +145,8 @@ async def _scrape_one(url: str) -> dict | None:
         if not result or not result.markdown:
             return None
 
-        text = result.markdown.strip()
+        text = _clean_markdown(result.markdown)
 
-        # Skip very short content (nav pages, error pages, etc.)
-        # Lower threshold for direct article URLs (200) vs discovered URLs (300)
         if len(text) < 200:
             return None
 
@@ -163,6 +161,31 @@ async def _scrape_one(url: str) -> dict | None:
         }
     except Exception:
         return None
+
+
+def _clean_markdown(md: str) -> str:
+    """Clean scraped markdown of common junk: table markup, image noise, nav artifacts."""
+    lines = md.split("\n")
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip empty table rows and image-only lines
+        if re.match(r"^\|[\s\-|]*\|$", stripped):
+            continue
+        if re.match(r"^\|.*\|\s*$", stripped) and "![" in stripped and stripped.count("|") > 2:
+            continue
+        # Skip lines that are only images/links with no text
+        if re.match(r"^!?\[.*\]\(.*\)$", stripped) and len(re.sub(r"!?\[.*?\]\(.*?\)", "", stripped).strip()) == 0:
+            continue
+        # Skip horizontal rules
+        if re.match(r"^[\-\*_]{3,}$", stripped):
+            continue
+        cleaned.append(line)
+
+    text = "\n".join(cleaned).strip()
+    # Collapse excessive blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text
 
 
 async def scrape_single_post(url: str) -> dict | None:

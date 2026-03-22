@@ -1,10 +1,18 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { submitTextStory, submitVoiceStory, submitBlog, getSubmissionStatus } from "@/lib/api";
+import {
+  submitTextStory,
+  submitVoiceStory,
+  submitBlog,
+  produceBlogCandidate,
+  getSubmissionStatus,
+  type BlogCandidate,
+} from "@/lib/api";
 import IdentityPromise from "@/components/IdentityPromise";
 
 type Tab = "write" | "speak" | "blog";
+type Phase = "input" | "candidates" | "producing" | "done";
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "write", label: "Write It", icon: "edit" },
@@ -17,9 +25,17 @@ export default function SubmitPage() {
   const [text, setText] = useState("");
   const [blogUrl, setBlogUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ id: string; status: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Blog candidate flow
+  const [phase, setPhase] = useState<Phase>("input");
+  const [candidates, setCandidates] = useState<BlogCandidate[]>([]);
+  const [totalFound, setTotalFound] = useState(0);
+
+  // Production result
+  const [result, setResult] = useState<{ id: string; status: string; title?: string } | null>(null);
+
+  // Voice recording
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -34,6 +50,7 @@ export default function SubmitPage() {
     try {
       const res = await submitTextStory(text);
       setResult(res);
+      setPhase("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submission failed");
     } finally {
@@ -56,6 +73,7 @@ export default function SubmitPage() {
         try {
           const res = await submitVoiceStory(blob);
           setResult(res);
+          setPhase("done");
         } catch (e) {
           setError(e instanceof Error ? e.message : "Voice submission failed");
         } finally {
@@ -81,9 +99,31 @@ export default function SubmitPage() {
     setError(null);
     try {
       const res = await submitBlog(blogUrl);
-      setResult({ id: "", status: `Found ${res.candidates?.length || 0} potential stories` });
+      setCandidates(res.candidates || []);
+      setTotalFound(res.total_posts_found || 0);
+      setPhase("candidates");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Blog scraping failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleProduceCandidate = async (candidate: BlogCandidate) => {
+    setSubmitting(true);
+    setError(null);
+    setPhase("producing");
+    try {
+      const res = await produceBlogCandidate({
+        url: candidate.url,
+        title: candidate.title,
+        text: candidate.full_text || candidate.snippet,
+      });
+      setResult(res);
+      setPhase("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Production failed");
+      setPhase("candidates");
     } finally {
       setSubmitting(false);
     }
@@ -93,13 +133,23 @@ export default function SubmitPage() {
     if (!result?.id) return;
     try {
       const status = await getSubmissionStatus(result.id);
-      setResult({ id: status.id, status: status.status });
+      setResult({ ...result, status: status.status });
     } catch {
       // ignore
     }
   };
 
-  if (result) {
+  const resetAll = () => {
+    setPhase("input");
+    setResult(null);
+    setCandidates([]);
+    setText("");
+    setBlogUrl("");
+    setError(null);
+  };
+
+  // --- Done screen ---
+  if (phase === "done" && result) {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center py-12">
@@ -109,23 +159,33 @@ export default function SubmitPage() {
             </span>
           </div>
           <h2 className="text-2xl font-bold mb-2">Story received</h2>
-          <p className="text-on-surface-variant mb-1">Status: {result.status}</p>
-          {result.id && (
-            <p className="text-on-surface-variant/60 text-sm">
-              Your story is being anonymized and produced into an audio episode.
-            </p>
+          {result.title && result.title !== "Untitled" && (
+            <p className="text-primary font-medium mb-2">&ldquo;{result.title}&rdquo;</p>
           )}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-surface-container rounded-full mb-2">
+            <span className={`w-2 h-2 rounded-full ${
+              result.status === "published" ? "bg-green-400" :
+              result.status === "rejected" ? "bg-error" :
+              "bg-secondary animate-pulse"
+            }`} />
+            <span className="text-sm text-on-surface-variant capitalize">{result.status}</span>
+          </div>
+          <p className="text-on-surface-variant/60 text-sm mt-2">
+            Your story is being anonymized, scored, and produced into an audio episode.
+            This may take a few minutes.
+          </p>
           <div className="mt-6 flex gap-3 justify-center">
             {result.id && (
               <button
                 onClick={checkStatus}
-                className="bg-surface-container border border-outline-variant/10 text-on-surface-variant px-5 py-2.5 rounded-full text-sm font-medium hover:border-primary-container/30 transition-all"
+                className="bg-surface-container border border-outline-variant/10 text-on-surface-variant px-5 py-2.5 rounded-full text-sm font-medium hover:border-primary-container/30 transition-all flex items-center gap-2"
               >
+                <span className="material-symbols-outlined text-lg">refresh</span>
                 Check status
               </button>
             )}
             <button
-              onClick={() => { setResult(null); setText(""); setBlogUrl(""); }}
+              onClick={resetAll}
               className="bg-primary-container text-on-primary px-5 py-2.5 rounded-full text-sm font-bold hover:scale-105 transition-transform"
             >
               Submit another
@@ -136,6 +196,122 @@ export default function SubmitPage() {
     );
   }
 
+  // --- Producing screen ---
+  if (phase === "producing") {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-16">
+        <div className="w-16 h-16 rounded-full bg-secondary/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <span className="material-symbols-outlined text-3xl text-secondary">graphic_eq</span>
+        </div>
+        <h2 className="text-xl font-bold mb-2">Producing your story...</h2>
+        <p className="text-on-surface-variant text-sm">
+          Anonymizing, scoring, and queuing for audio production.
+        </p>
+      </div>
+    );
+  }
+
+  // --- Blog candidates selection screen ---
+  if (phase === "candidates" && candidates.length > 0) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="flex items-center gap-4">
+          <button onClick={resetAll} className="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">
+            arrow_back
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold">
+              Found {totalFound} post{totalFound !== 1 ? "s" : ""}
+            </h2>
+            <p className="text-on-surface-variant text-sm">
+              Pick which stories to anonymize and produce as audio episodes.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {candidates.map((c, i) => {
+            const depth = Number(c.score?.emotional_depth) || 0;
+            const univ = Number(c.score?.universality) || 0;
+            const orig = Number(c.score?.originality) || 0;
+            const total = depth + univ + orig;
+            const category = c.score?.category || "unknown";
+            const emotion = c.score?.emotion || "unknown";
+            const titleSuggestion = c.score?.title_suggestion;
+
+            return (
+              <div
+                key={i}
+                className="bg-surface-container-low border border-outline-variant/10 rounded-xl p-5 hover:border-primary-container/30 transition-all"
+              >
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-lg text-on-surface truncate">
+                      {c.title}
+                    </h3>
+                    {titleSuggestion && titleSuggestion !== c.title && (
+                      <p className="text-primary text-sm">
+                        Suggested: &ldquo;{String(titleSuggestion)}&rdquo;
+                      </p>
+                    )}
+                    <p className="text-xs text-on-surface-variant/60 truncate mt-0.5">{c.url}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      c.passes_quality
+                        ? "bg-green-900/30 text-green-400"
+                        : "bg-secondary/20 text-secondary"
+                    }`}>
+                      {total}/30
+                    </span>
+                  </div>
+                </div>
+
+                {/* Snippet */}
+                <p className="text-on-surface-variant text-sm leading-relaxed mb-3 line-clamp-3">
+                  {c.snippet}
+                </p>
+
+                {/* Score breakdown + metadata */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  <span className="px-2 py-0.5 bg-primary-container/10 text-primary text-xs font-bold rounded-full capitalize">
+                    {String(category)}
+                  </span>
+                  <span className="px-2 py-0.5 bg-tertiary/10 text-tertiary text-xs font-bold rounded-full capitalize">
+                    {String(emotion)}
+                  </span>
+                  <span className="text-[10px] text-on-surface-variant/50">
+                    Depth {depth} · Universal {univ} · Original {orig}
+                  </span>
+                </div>
+
+                {/* Produce button */}
+                <button
+                  onClick={() => handleProduceCandidate(c)}
+                  disabled={submitting}
+                  className="w-full flex items-center justify-center gap-2 bg-primary-container text-on-primary py-3 rounded-full font-bold hover:scale-[1.02] active:scale-[0.98] transition-transform disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    play_arrow
+                  </span>
+                  Produce This Story
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {error && (
+          <div className="bg-error-container/20 border border-error/20 rounded-xl p-4 flex items-center gap-3">
+            <span className="material-symbols-outlined text-error">error</span>
+            <span className="text-error text-sm">{error}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- Input screen ---
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div className="text-center">
@@ -221,23 +397,38 @@ export default function SubmitPage() {
       {/* Blog tab */}
       {tab === "blog" && (
         <div className="space-y-4">
-          <input
-            type="url"
-            value={blogUrl}
-            onChange={(e) => setBlogUrl(e.target.value)}
-            placeholder="https://yourblog.com"
-            className="w-full bg-surface-container border border-outline-variant/10 rounded-xl p-4 text-on-surface placeholder-on-surface-variant/40 focus:outline-none focus:border-primary-container/40 transition-colors"
-          />
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant/40">
+              link
+            </span>
+            <input
+              type="url"
+              value={blogUrl}
+              onChange={(e) => setBlogUrl(e.target.value)}
+              placeholder="https://yourblog.com or a specific article URL"
+              className="w-full bg-surface-container border border-outline-variant/10 rounded-xl p-4 pl-12 text-on-surface placeholder-on-surface-variant/40 focus:outline-none focus:border-primary-container/40 transition-colors"
+            />
+          </div>
           <p className="text-on-surface-variant/60 text-sm">
-            We&apos;ll scan your blog and find the most emotionally compelling posts.
-            You choose which ones to share anonymously.
+            Paste a blog URL to discover stories, or a specific article URL to produce just that one.
+            We&apos;ll scrape, score, and let you pick which ones to anonymize and publish.
           </p>
           <button
             onClick={handleBlogSubmit}
             disabled={submitting || !blogUrl}
-            className="bg-primary-container text-on-primary px-6 py-2.5 rounded-full text-sm font-bold hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
+            className="flex items-center gap-2 bg-primary-container text-on-primary px-6 py-2.5 rounded-full text-sm font-bold hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
           >
-            {submitting ? "Scanning..." : "Scan Blog"}
+            {submitting ? (
+              <>
+                <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
+                Scanning...
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-lg">search</span>
+                Scan &amp; Score
+              </>
+            )}
           </button>
         </div>
       )}

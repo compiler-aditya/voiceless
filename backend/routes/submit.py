@@ -92,6 +92,7 @@ async def submit_blog(submission: BlogSubmission):
                 "url": post["url"],
                 "title": post.get("title", "Untitled"),
                 "snippet": post["text"][:300],
+                "full_text": post["text"],
                 "score": score,
                 "total_score": total,
                 "passes_quality": score.get("passes", False),
@@ -115,6 +116,38 @@ async def submit_blog(submission: BlogSubmission):
         "total_posts_found": len(posts),
         "candidates": candidates[:10],
     }
+
+
+@router.post("/blog/produce")
+async def produce_blog_candidate(body: dict):
+    """Take a scraped blog candidate and produce it as an episode.
+
+    Expects: {"url": str, "title": str, "text": str}
+    """
+    url = body.get("url", "")
+    title = body.get("title", "Untitled")
+    text = body.get("text", "")
+
+    if not text or len(text) < 50:
+        raise HTTPException(status_code=400, detail="Not enough content to produce.")
+
+    db = get_db()
+    result = db.table("stories").insert({
+        "title": title,
+        "anonymized_text": "",
+        "source_type": "user_blog",
+        "category": "hope",
+        "emotion": "peace",
+        "status": "pending",
+        "episode_script": text,
+    }).execute()
+
+    story_id = result.data[0]["id"]
+
+    from tasks.produce_episode import produce_episode_task
+    produce_episode_task.delay(story_id, text, "user_blog")
+
+    return {"id": story_id, "status": "pending", "title": title}
 
 
 @router.get("/status/{story_id}")

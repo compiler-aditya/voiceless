@@ -51,9 +51,16 @@ export async function submitVoiceStory(audioBlob: Blob) {
 }
 
 export async function submitBlog(blogUrl: string) {
-  return fetcher<{ blog_url: string; candidates: BlogCandidate[] }>("/submit/blog", {
+  return fetcher<{ blog_url: string; total_posts_found: number; candidates: BlogCandidate[] }>("/submit/blog", {
     method: "POST",
     body: JSON.stringify({ blog_url: blogUrl }),
+  });
+}
+
+export async function produceBlogCandidate(candidate: { url: string; title: string; text: string }) {
+  return fetcher<{ id: string; status: string; title: string }>("/submit/blog/produce", {
+    method: "POST",
+    body: JSON.stringify(candidate),
   });
 }
 
@@ -165,5 +172,8 @@ export interface BlogCandidate {
   url: string;
   title: string;
   snippet: string;
-  score: Record<string, number>;
+  full_text?: string;
+  score: Record<string, number | string>;
+  total_score?: number;
+  passes_quality?: boolean;
 }
